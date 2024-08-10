@@ -6,7 +6,7 @@ authors = ["afonsolelis <afonsolelis@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.11"
 firebase-admin = "^6.5.0"
 streamlit = "^1.37.1"
 python-dotenv = "^1.0.1"
