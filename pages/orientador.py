@@ -18,7 +18,7 @@ def check_auth(token):
 st.title("Seleção de Repositórios")
 
 # Campo de entrada para o token
-token = st.text_input("Insira o token de acesso:")
+token = st.text_input("Insira o token de acesso:", type="password")
 
 # Verificar o token
 if check_auth(token):
