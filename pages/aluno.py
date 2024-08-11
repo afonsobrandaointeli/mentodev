@@ -34,6 +34,16 @@ def get_repo_names():
         repo_names.append(doc.to_dict().get('name'))
     return repo_names
 
+# Função para obter os alunos associados a um repositório
+def get_alunos_by_repo(repo_name):
+    alunos = []
+    docs = db.collection('reponames').where('name', '==', repo_name).stream()
+    for doc in docs:
+        data = doc.to_dict()
+        if 'alunos' in data:
+            alunos.append(data['alunos'])
+    return alunos
+
 # Título da aplicação
 st.title("Seleção de Repositórios")
 
@@ -45,3 +55,14 @@ selected_repo = st.selectbox("Escolha um repositório:", repo_names)
 
 # Exibir o repositório selecionado
 st.write(f"Você selecionou: {selected_repo}")
+
+# Obter os alunos do repositório selecionado
+alunos = get_alunos_by_repo(selected_repo)
+
+# Exibir a lista de alunos
+if alunos:
+    st.subheader(f"Alunos no repositório '{selected_repo}':")
+    for aluno in alunos:
+        st.write(aluno)
+else:
+    st.write("Nenhum aluno encontrado para este repositório.")
