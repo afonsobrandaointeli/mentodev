@@ -52,10 +52,34 @@ if check_auth(token):
     # Obter os nomes dos repositórios
     repo_names = get_repo_names()
 
-    # Dropdown para selecionar um repositório
+    # Dropdown para selecionar um repositório e sprint
     selected_repo = st.selectbox("Escolha um repositório:", repo_names)
+    select_sprint = st.selectbox("Escolha uma Sprint:", ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Sprint 5"])
+    
+    st.title(f"Seleção de Artefatos do Repositório{selected_repo} da {select_sprint}")
+    # Seleção de artefatos da sprint
+    def select_artifacts():
+        artifacts_list = ['Artefato 1', 'Artefato 2', 'Artefato 3', 'Artefato 4', 'Artefato 5']
+        selected_artifacts = []
+        for artifact in artifacts_list:
+            if st.checkbox(artifact):
+                selected_artifacts.append(artifact)
+        return selected_artifacts
 
-    # Exibir o repositório selecionado
-    st.write(f"Você selecionou: {selected_repo}")
+    selected_artifacts = select_artifacts()
+
+    st.write(f"Você selecionou os Artefatos: {', '.join(selected_artifacts)}")
+    artifact_radio = st.radio("Deseja avaliar os artefatos selecionados?", ("Sim", "Não"))
+    try:    
+            if artifact_radio == "Sim":
+                artifact_scores = {}
+                for artifact in selected_artifacts:
+                    artifact_scores[artifact] = int(st.number_input(f"Digite a Nota do Artefato {artifact}:"))
+                average = round(sum(artifact_scores.values()) / len(selected_artifacts), 2)
+                st.write(f"A média de notas dos Artefato foi {average}")
+            else:
+                st.write("Avaliação dos artefatos não realizada")
+    except:
+            st.write("Não é possível realizar a avaliação sem ao menos um artefato selecionado")
 else:
     st.error("Acesso negado. Por favor, insira um token válido.")
