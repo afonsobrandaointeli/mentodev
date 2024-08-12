@@ -93,7 +93,6 @@ if check_auth(token):
             # Filtrar alunos vazios
             alunos = {k: v for k, v in alunos.items() if v}
             
-            # Adicionar os alunos ao repositório selecionado
             # Encontrar o documento correspondente ao repositório selecionado
             docs = db.collection('reponames').where('name', '==', selected_repo).stream()
             for doc in docs:
@@ -102,5 +101,55 @@ if check_auth(token):
 
     # Exibir o repositório selecionado
     st.write(f"Repositório selecionado: {selected_repo}")
+    
+    st.title("Inserir Artefatos")
+
+    # Inicialize a sessão para armazenar os artefatos
+    if 'artifacts' not in st.session_state:
+        st.session_state.artifacts = []
+
+    # Função para adicionar uma nova caixa de texto
+    def add_artifact_box():
+        st.session_state.artifacts.append("")
+
+    # Função para remover uma caixa de texto
+    def remove_artifact(index):
+        st.session_state.artifacts.pop(index)
+
+    # Botão "+" para adicionar novas caixas de texto
+    if st.button("Adicionar Artefato"):
+        add_artifact_box()
+
+    # Exibe todas as caixas de texto e armazena seus valores
+    indexes_to_remove = []
+    for i, box in enumerate(st.session_state.artifacts):
+        cols = st.columns([4, 1])  # Configura duas colunas: uma para a caixa de texto e outra para o botão de remoção
+        with cols[0]:
+            st.session_state.artifacts[i] = st.text_input(f"Nome do Artefato {i+1}", value=box, key=f"artifact_{i}")
+        with cols[1]:
+            if st.button("Remover", key=f"remove_{i}"):
+                indexes_to_remove.append(i)
+
+    # Remova os itens marcados para remoção
+    if indexes_to_remove:
+        for i in sorted(indexes_to_remove, reverse=True):
+            remove_artifact(i)
+            
+    # Exibe o conteúdo dos artefatos
+    st.write("Artefatos:")
+    for box in st.session_state.artifacts:
+        st.write(box)
+        
+    # Botão para submeter os artefatos
+    if st.button("Submeter Artefatos"):
+        artifacts = [artifact for artifact in st.session_state.artifacts if artifact]
+        
+        if not artifacts:
+            st.error("Por favor, adicione pelo menos um artefato antes de submeter.")
+        else:
+            docs = db.collection('reponames').where('name', '==', selected_repo).stream()
+            for doc in docs:
+                db.collection('reponames').document(doc.id).set({"artefatos": artifacts}, merge=True)
+            st.success(f"Os Artefatos {artifacts} inseridos ao grudo do repositório '{selected_repo}' com sucesso!")
 else:
     st.error("Acesso negado. Por favor, insira um token válido.")
