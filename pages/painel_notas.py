@@ -1,40 +1,11 @@
-# import streamlit as st
-# import pandas as pd
-
-# # Criando um campo de entrada para testar a interatividade da tabela
-# user_input = st.number_input(label="Coloque a nota do aluno aqui: ", min_value=0.0, max_value=10.0)
-
-# # definindo os dados
-# data = {
-#     "critérios": ["Desempenho", "Demérito", "Ir além", "Nota Final"],
-#     "aluno 1": [f"{user_input}", "2", "31", "12"],
-#     "aluno 2": ["12", "22", "32", "12"],
-#     "aluno 3": ["13", "23", "33", "12"]
-# }
-# # criando o dataframe
-# df = pd.DataFrame(data)
-
-# # redefinindo a coluna de index do df
-# # df.set_index("critérios", inplace=True)
-# # df.index.name = "Critérios"
-
-# # visualizar dataframe
-# st.write("# Vendo uma matriz personalizada")
-
-# def to_color_cell(row):
-#     return 'background-color: blue'
-
-# df = df.style.apply(to_color_cell, axis=0)
-
-# st.dataframe(df)
-
 import streamlit as st
 import pandas as pd
 
-# Criando um campo de entrada para testar a interatividade da tabela
+# Adicionei um campo de entrada só para testar a interatividade da tabela
+# Essa tabela deve receber as notas dos alunos na coluna "desempenho" (sempre índice[0] da lista do aluno)
+
 user_input = st.number_input(label="Coloque a nota do aluno aqui: ", min_value=0.0, max_value=10.0)
 
-# Definindo os dados
 data = {
     "critérios": ["Desempenho", "Demérito", "Ir além", "Nota Final"],
     "aluno 1": ["8.75", "0.90", "0.35", "8.20"],
@@ -47,21 +18,17 @@ data = {
     "aluno 8": ["7.30", "0.40", "0.20", "7.10"],
 }
 
-# Criando o DataFrame
 df = pd.DataFrame(data)
 
-# Redefinindo a coluna de índice do DataFrame
 df.set_index("critérios", inplace=True)
 df.index.name = "Critérios"
 
-# Função de coloração para a linha específica
 def color_row(row):
     if row.name == "Nota Final":
         return [color_cells(val) for val in row]
     colors = {"Desempenho": "blue", "Demérito": "red", "Ir além": "purple"}
     return [f'background-color: {colors.get(row.name, "")}'] * len(row)
 
-# Função de coloração para células
 def color_cells(val):
     val = float(val)
     if val < 7:
@@ -73,8 +40,6 @@ def color_cells(val):
     else:
         return 'background-color: blue'
 
-# Aplicando a estilização
 styled_df = df.style.apply(color_row, axis=1)
 
-# Exibindo no Streamlit
 st.dataframe(styled_df)
