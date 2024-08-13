@@ -46,31 +46,47 @@ class AlunoRepository:
         return alunos
     
     def dailys(self, repo_name):
-        # Obter os alunos do repositório
-        alunos = []
+        # Obter o documento do repositório
         docs = self.db.collection('reponames').where('name', '==', repo_name).stream()
+
+        # Variáveis para armazenar os dados
+        existing_dailys = None  
+        alunos = []
+
         for doc in docs:
             data = doc.to_dict()
+            # Verificar se o repositório já tem alunos
             if 'alunos' in data:
                 alunos = data['alunos']
-        
-        # Gerar as datas para as duas semanas (excluindo finais de semana)
-        today = datetime.now()
-        dates = []
-        week_num = 1
-        for i in range(14):  # Duas semanas
-            day = today + timedelta(days=i)
-            if day.weekday() < 5:  # Exclui sábado e domingo
-                dates.append({'Semana': week_num, 'Data': day.strftime("%d/%m/%Y")})
-            if len(dates) == 5:
-                week_num += 1
+            # Verificar se o repositório já tem registros de dailys
+            if 'dailys' in data:
+                existing_dailys = data['dailys']
 
-        # Criar um DataFrame com as colunas 'Semana' e 'Data'
-        df = pd.DataFrame(dates)
+        # Se já existir um registro de dailys, carregar os dados
+        if existing_dailys:
+            # Criar DataFrame a partir dos dados existentes
+            df = pd.DataFrame(existing_dailys)
+            # Separar as colunas de "Alunos" em colunas individuais
+            alunos_data = pd.DataFrame(df['Alunos'].tolist())
+            df = df.drop(columns=['Alunos']).join(alunos_data)
+        else:
+            # Se não existir, criar uma nova tabela
+            today = datetime.now()
+            dates = []
+            week_num = 1
+            for i in range(14):  # Duas semanas
+                day = today + timedelta(days=i)
+                if day.weekday() < 5:  # Exclui sábado e domingo
+                    dates.append({'Semana': week_num, 'Data': day.strftime("%d/%m/%Y")})
+                if len(dates) == 5:
+                    week_num += 1
 
-        # Adicionar colunas para cada aluno com opções "Sim" e "Não"
-        for aluno in alunos:
-            df[aluno] = ""
+            # Criar um DataFrame com as colunas 'Semana' e 'Data'
+            df = pd.DataFrame(dates)
+
+            # Adicionar colunas para cada aluno com opções "Sim" e "Não"
+            for aluno in alunos:
+                df[aluno] = ""
 
         # Exibir a tabela interativa
         edited_df = st.data_editor(df, use_container_width=True, key="editable_table")
@@ -78,16 +94,18 @@ class AlunoRepository:
         # Botão para salvar os dados
         if st.button("Salvar"):
             # Processar os dados da tabela
+            daily_entries = []
             for index, row in edited_df.iterrows():
                 data = {
                     "Semana": row['Semana'],
                     "Data": row['Data'],
                     "Alunos": {aluno: row[aluno] for aluno in alunos}
                 }
-                # Salvar no banco de dados como "Critério de Avaliação - Reuniões Diárias"
-                self.db.collection('reponames').document(repo_name).collection('dailys').add(data)
+                daily_entries.append(data)
 
+            # Salvar no banco de dados como "Critério de Avaliação - Reuniões Diárias"
+            docs = self.db.collection('reponames').where('name', '==', repo_name).stream()
+            for doc in docs:
+                self.db.collection('reponames').document(doc.id).set({"dailys": daily_entries}, merge=True)
 
-            print("Dados salvos com sucesso!", edited_df)
             st.success("Dados salvos com sucesso!")
-        
