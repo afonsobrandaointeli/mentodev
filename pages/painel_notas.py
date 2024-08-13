@@ -1,10 +1,39 @@
 import streamlit as st
 import pandas as pd
+import os
+import firebase_admin
+from firebase_admin import credentials, firestore
+from dotenv import load_dotenv
+
+db = firestore.client()
 
 # Adicionei um campo de entrada só para testar a interatividade da tabela
 # Essa tabela deve receber as notas dos alunos na coluna "desempenho" (sempre índice[0] da lista do aluno)
 
+def get_repo_names():
+    repo_names = []
+    docs = db.collection('reponames').stream()
+    for doc in docs:
+        repo_names.append(doc.to_dict().get('name'))
+    return repo_names
+
+repo_names = get_repo_names()
+
+def get_alunos_by_repo(repo_name_user):
+    alunos = []
+    docs = db.collection('reponames').where('name', '==', repo_name_user).stream()
+    for doc in docs:
+        data = doc.to_dict()
+        if 'alunos' in data:
+            alunos.append(data['alunos'])
+            print(alunos)
+    return alunos
+
+
+repo_name_user = st.selectbox("Escolha um repositório:", repo_names)
 user_input = st.number_input(label="Coloque a nota do aluno aqui: ", min_value=0.0, max_value=10.0)
+
+get_alunos_by_repo(repo_name_user)
 
 data = {
     "critérios": ["Desempenho", "Demérito", "Ir além", "Nota Final"],
@@ -17,6 +46,7 @@ data = {
     "aluno 7": ["7.30", "0.40", "0.20", "7.10"],
     "aluno 8": ["7.30", "0.40", "0.20", "7.10"],
 }
+
 
 df = pd.DataFrame(data)
 
