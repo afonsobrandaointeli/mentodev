@@ -8,10 +8,8 @@ import pandas as pd
 
 class AlunoRepository:
     def __init__(self):
-        # Carregar variáveis de ambiente do arquivo .env
         load_dotenv()
 
-        # Inicializar o Firebase apenas se ainda não estiver inicializado
         if not firebase_admin._apps:
             cred = credentials.Certificate({
                 "type": os.getenv("TYPE"),
@@ -37,75 +35,122 @@ class AlunoRepository:
         return repo_names
 
     def get_alunos_by_repo(self, repo_name):
-        alunos = []
+        alunos = {}
         docs = self.db.collection('reponames').where('name', '==', repo_name).stream()
+        
         for doc in docs:
             data = doc.to_dict()
             if 'alunos' in data:
-                alunos.append(data['alunos'])
-        return alunos
-    
+                alunos_data = data['alunos']
+                
+                # Itera sobre o dicionário de alunos e extrai apenas os emails
+                for aluno_key, aluno_value in alunos_data.items():
+                    if isinstance(aluno_value, dict):
+                        # Tenta extrair o email do aluno, ignorando a chave 'dailys'
+                        for key, value in aluno_value.items():
+                            if key != 'dailys':
+                                alunos[aluno_key] = value
+            
+        return alunos if isinstance(alunos, dict) else {}
+
+
+        
+    def carrregar_dailys(self, repo_name):
+        dailys = {}
+        docs = self.db.collection('reponames').where('name', '==', repo_name).stream()
+
+        # Itera sobre todos os documentos retornados
+        for doc in docs:
+            data = doc.to_dict()
+            if 'alunos' in data:
+                # Itera sobre cada aluno no documento
+                for aluno_key, aluno_data in data['alunos'].items():
+                    if 'dailys' in aluno_data:
+                        # Itera sobre cada registro de daily do aluno
+                        for daily in aluno_data['dailys']:
+                            print(f"Daily: {daily}")
+                            print(f"Data: {daily['Data']}")
+                            print(f"Aluno: {aluno_key}")
+                            # Busca o status com base no email do aluno no dicionário daily
+                            status = daily.get(aluno_key, 'Não encontrado')
+                            print(f"Status: {status}")
+                            date = daily['Data']
+                            if date not in dailys:
+                                dailys[date] = {}
+                            # Adiciona ou atualiza o status do aluno para essa data
+                            dailys[date][aluno_key] = status
+
+        # Converte o dicionário em uma lista de dicionários, um para cada data
+        dailys_list = []
+
+        for date in sorted(dailys.keys()):
+            daily_entry = {'Data': date}
+            for aluno_key in dailys[date].keys():
+                daily_entry[aluno_key] = dailys[date][aluno_key]
+            dailys_list.append(daily_entry)
+        
+        print(f"Dailys carregadas: {dailys_list}")
+        return dailys_list
+
+
+
+
+
     def dailys(self, repo_name):
-        # Obter o documento do repositório
-        docs = self.db.collection('reponames').where('name', '==', repo_name).stream()
+        dailys_existentes = self.carrregar_dailys(repo_name)
 
-        # Variáveis para armazenar os dados
-        existing_dailys = None  
-        alunos = []
-
-        for doc in docs:
-            data = doc.to_dict()
-            # Verificar se o repositório já tem alunos
-            if 'alunos' in data:
-                alunos = data['alunos']
-            # Verificar se o repositório já tem registros de dailys
-            if 'dailys' in data:
-                existing_dailys = data['dailys']
-
-        # Se já existir um registro de dailys, carregar os dados
-        if existing_dailys:
-            # Criar DataFrame a partir dos dados existentes
-            df = pd.DataFrame(existing_dailys)
-            # Separar as colunas de "Alunos" em colunas individuais
-            alunos_data = pd.DataFrame(df['Alunos'].tolist())
-            df = df.drop(columns=['Alunos']).join(alunos_data)
-        else:
-            # Se não existir, criar uma nova tabela
+        if not dailys_existentes:
+            print("Nenhuma daily encontrada. Criando uma nova tabela.")
+            alunos = self.get_alunos_by_repo(repo_name)
+            
             today = datetime.now()
             dates = []
             week_num = 1
-            for i in range(14):  # Duas semanas
+            for i in range(14):
                 day = today + timedelta(days=i)
-                if day.weekday() < 5:  # Exclui sábado e domingo
+                if day.weekday() < 5:  # Exclui sábados e domingos
                     dates.append({'Semana': week_num, 'Data': day.strftime("%d/%m/%Y")})
-                if len(dates) == 5:
-                    week_num += 1
+                    if len(dates) == 5:
+                        week_num += 1
 
-            # Criar um DataFrame com as colunas 'Semana' e 'Data'
             df = pd.DataFrame(dates)
 
-            # Adicionar colunas para cada aluno com opções "Sim" e "Não"
-            for aluno in alunos:
-                df[aluno] = ""
+            # Adicionar colunas para cada aluno, usando apenas os emails
+            if isinstance(alunos, dict):
+                for aluno_email in alunos.values():
+                    df[aluno_email] = ""
 
-        # Exibir a tabela interativa
-        edited_df = st.data_editor(df, use_container_width=True, key="editable_table")
+                # Exibe o editor de tabela no Streamlit
+                edited_df = st.data_editor(df, use_container_width=True, key="editable_table")
 
-        # Botão para salvar os dados
-        if st.button("Salvar"):
-            # Processar os dados da tabela
-            daily_entries = []
-            for index, row in edited_df.iterrows():
-                data = {
-                    "Semana": row['Semana'],
-                    "Data": row['Data'],
-                    "Alunos": {aluno: row[aluno] for aluno in alunos}
-                }
-                daily_entries.append(data)
+                # Botão de salvar as modificações
+                if st.button("Salvar"):
+                    updated_alunos = {}
+                    for aluno_key, aluno_email in alunos.items():
+                        daily_list = []
+                        for index, row in edited_df.iterrows():
+                            daily_list.append({
+                                "Data": row['Data'],
+                                aluno_email: row[aluno_email]
+                            })
+                        updated_alunos[aluno_key] = {
+                            aluno_email: aluno_email,
+                            "dailys": daily_list
+                        }
 
-            # Salvar no banco de dados como "Critério de Avaliação - Reuniões Diárias"
-            docs = self.db.collection('reponames').where('name', '==', repo_name).stream()
-            for doc in docs:
-                self.db.collection('reponames').document(doc.id).set({"dailys": daily_entries}, merge=True)
+                    # Atualizar o Firestore com os dados modificados
+                    docs = self.db.collection('reponames').where('name', '==', repo_name).stream()
+                    for doc in docs:
+                        update_data = {"alunos": updated_alunos}
+                        self.db.collection('reponames').document(doc.id).set(update_data, merge=True)
 
-            st.success("Dados salvos com sucesso!")
+                    st.success("Dados salvos com sucesso!")
+            else:
+                st.error("O objeto 'alunos' não é um dicionário.")
+        else:
+            print("Dailys encontradas. Exibindo tabela existente.")
+            df = pd.DataFrame(dailys_existentes)
+            st.write(df)
+            st.write("Dailys já existentes para esta sprint.")
+
+
