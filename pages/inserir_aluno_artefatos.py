@@ -104,29 +104,35 @@ if check_auth(token):
     
     st.title("Inserir Artefatos")
 
-    # Inicialize a sessão para armazenar os artefatos
+    # Inicialize a sessão para armazenar os artefatos e suas descrições
     if 'artifacts' not in st.session_state:
         st.session_state.artifacts = []
+    if 'descriptions' not in st.session_state:
+        st.session_state.descriptions = []
 
-    # Função para adicionar uma nova caixa de texto
+    # Função para adicionar uma nova caixa de texto para o artefato e sua descrição
     def add_artifact_box():
         st.session_state.artifacts.append("")
+        st.session_state.descriptions.append("")
 
-    # Função para remover uma caixa de texto
+    # Função para remover um artefato e sua descrição
     def remove_artifact(index):
         st.session_state.artifacts.pop(index)
+        st.session_state.descriptions.pop(index)
 
-    # Botão "+" para adicionar novas caixas de texto
+    # Botão para adicionar novas caixas de texto
     if st.button("Adicionar Artefato"):
         add_artifact_box()
 
-    # Exibe todas as caixas de texto e armazena seus valores
+    # Exibe todas as caixas de texto para os artefatos e suas descrições
     indexes_to_remove = []
     for i, box in enumerate(st.session_state.artifacts):
-        cols = st.columns([4, 1])  # Configura duas colunas: uma para a caixa de texto e outra para o botão de remoção
+        cols = st.columns([3, 2, 1])  # Configura três colunas: uma para o nome, outra para a descrição e outra para o botão de remoção
         with cols[0]:
             st.session_state.artifacts[i] = st.text_input(f"Nome do Artefato {i+1}", value=box, key=f"artifact_{i}")
         with cols[1]:
+            st.session_state.descriptions[i] = st.text_area(f"Descrição do Artefato {i+1}", value=st.session_state.descriptions[i], key=f"description_{i}")
+        with cols[2]:
             if st.button("Remover", key=f"remove_{i}"):
                 indexes_to_remove.append(i)
 
@@ -134,22 +140,30 @@ if check_auth(token):
     if indexes_to_remove:
         for i in sorted(indexes_to_remove, reverse=True):
             remove_artifact(i)
-            
-    # Exibe o conteúdo dos artefatos
-    st.write("Artefatos:")
-    for box in st.session_state.artifacts:
-        st.write(box)
-        
-    # Botão para submeter os artefatos
+
+    # Exibe a lista dos artefatos e suas descrições antes do envio
+    st.subheader("Artefatos a serem submetidos:")
+    for i, (artifact, description) in enumerate(zip(st.session_state.artifacts, st.session_state.descriptions)):
+        if artifact:
+            st.write(f"**Artefato {i+1}:** {artifact}")
+            st.write(f"**Descrição:** {description}")
+
+    # Seleção da Sprint
+    sprint_names = [f"Sprint_{i+1}" for i in range(5)]
+    selected_sprint = st.selectbox("Escolha uma Sprint:", sprint_names)
+    
+    # Botão para submeter os artefatos e suas descrições
     if st.button("Submeter Artefatos"):
-        artifacts = [artifact for artifact in st.session_state.artifacts if artifact]
+        artifacts_data = [{"nome": artifact, "descricao": description} for artifact, description in zip(st.session_state.artifacts, st.session_state.descriptions) if artifact]
         
-        if not artifacts:
-            st.error("Por favor, adicione pelo menos um artefato antes de submeter.")
+        if not artifacts_data:
+            st.error("Por favor, adicione pelo menos um artefato com descrição antes de submeter.")
         else:
             docs = db.collection('reponames').where('name', '==', selected_repo).stream()
             for doc in docs:
-                db.collection('reponames').document(doc.id).set({"artefatos": artifacts}, merge=True)
-            st.success(f"Os Artefatos {artifacts} inseridos ao grudo do repositório '{selected_repo}' com sucesso!")
+                # Atualizar o documento com os artefatos e suas descrições dentro da sprint selecionada
+                sprint_key = f"{selected_sprint}"
+                db.collection('reponames').document(doc.id).set({sprint_key: {"artefatos": artifacts_data}}, merge=True)
+            st.success(f"Artefatos inseridos na '{selected_sprint}' do repositório '{selected_repo}' com sucesso!")
 else:
     st.error("Acesso negado. Por favor, insira um token válido.")
