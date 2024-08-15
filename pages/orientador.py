@@ -49,37 +49,67 @@ if check_auth(token):
             repo_names.append(doc.to_dict().get('name'))
         return repo_names
 
+    # Função para obter os artefatos da sprint selecionada
+    def get_artifacts(repo_name, sprint_name):
+        sprint_key = f"{sprint_name}"
+        docs = db.collection('reponames').where('name', '==', repo_name).stream()
+        for doc in docs:
+            data = doc.to_dict()
+            sprint_data = data.get(sprint_key, {})
+            return sprint_data.get('artefatos', []), doc.id
+        return [], None
+
+    # Função para salvar as notas e a média na sprint
+    def save_artifact_scores(repo_doc_id, sprint_name, artifacts, average_score):
+        sprint_key = f"{sprint_name}"
+
+        # Atualizar os artefatos com as notas
+        updated_artifacts = []
+        for artifact in artifacts:
+            artifact_name = artifact['nome']
+            artifact['nota'] = artifact_scores.get(artifact_name, 0)
+            updated_artifacts.append(artifact)
+        
+        # Preparar os dados para atualização
+        updates = {
+            f"{sprint_key}.artefatos": updated_artifacts,
+            f"{sprint_key}.media_notas": average_score
+        }
+
+        # Realizar a atualização no Firestore
+        db.collection('reponames').document(repo_doc_id).update(updates)
+
     # Obter os nomes dos repositórios
     repo_names = get_repo_names()
 
     # Dropdown para selecionar um repositório e sprint
     selected_repo = st.selectbox("Escolha um repositório:", repo_names)
-    select_sprint = st.selectbox("Escolha uma Sprint:", ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Sprint 5"])
+    select_sprint = st.selectbox("Escolha uma Sprint:", [f"Sprint_{i+1}" for i in range(5)])
     
-    st.title(f"Seleção de Artefatos do Repositório{selected_repo} da {select_sprint}")
-    # Seleção de artefatos da sprint
-    def select_artifacts():
-        artifacts_list = ['Artefato 1', 'Artefato 2', 'Artefato 3', 'Artefato 4', 'Artefato 5']
+    st.title(f"Seleção de Artefatos do Repositório {selected_repo} da {select_sprint}")
+
+    # Buscar artefatos do banco de dados
+    artifacts_list, repo_doc_id = get_artifacts(selected_repo, select_sprint)
+    
+    if artifacts_list:
+        st.write(f"Artefatos disponíveis na {select_sprint} do repositório {selected_repo}:")
+
+        # Seleção de artefatos da sprint para avaliação
         selected_artifacts = []
+        artifact_scores = {}
         for artifact in artifacts_list:
-            if st.checkbox(artifact):
+            if st.checkbox(f"{artifact.get('nome')}: {artifact.get('descricao')}"):
                 selected_artifacts.append(artifact)
-        return selected_artifacts
-
-    selected_artifacts = select_artifacts()
-
-    st.write(f"Você selecionou os Artefatos: {', '.join(selected_artifacts)}")
-    artifact_radio = st.radio("Deseja avaliar os artefatos selecionados?", ("Sim", "Não"))
-    try:    
-            if artifact_radio == "Sim":
-                artifact_scores = {}
-                for artifact in selected_artifacts:
-                    artifact_scores[artifact] = int(st.number_input(f"Digite a Nota do Artefato {artifact}:"))
-                average = round(sum(artifact_scores.values()) / len(selected_artifacts), 2)
-                st.write(f"A média de notas dos Artefato foi {average}")
+                artifact_scores[artifact['nome']] = st.number_input(f"Digite a Nota do Artefato {artifact['nome']}:", min_value=0, max_value=10)
+        
+        if st.button("Submeter Notas"):
+            if selected_artifacts and repo_doc_id:
+                average_score = round(sum(artifact_scores.values()) / len(artifact_scores), 2)
+                save_artifact_scores(repo_doc_id, select_sprint, selected_artifacts, average_score)
+                st.success(f"Notas submetidas com sucesso! Média da Sprint: {average_score}")
             else:
-                st.write("Avaliação dos artefatos não realizada")
-    except:
-            st.write("Não é possível realizar a avaliação sem ao menos um artefato selecionado")
+                st.error("Selecione pelo menos um artefato e atribua uma nota.")
+    else:
+        st.write(f"Não há artefatos cadastrados na {select_sprint} do repositório {selected_repo}.")
 else:
     st.error("Acesso negado. Por favor, insira um token válido.")
