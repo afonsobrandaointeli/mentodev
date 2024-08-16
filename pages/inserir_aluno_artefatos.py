@@ -59,6 +59,9 @@ if check_auth(token):
             sprint_data = data.get(sprint_name, {})
             return sprint_data.get('artefatos', [])
         return []
+    
+    def is_valid_email(email):
+        return email.endswith("@sou.inteli.edu.br")
 
     # Obter os nomes dos repositórios
     repo_names = get_repo_names()
