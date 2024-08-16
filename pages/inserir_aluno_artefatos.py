@@ -176,5 +176,34 @@ if check_auth(token):
                 sprint_key = f"{selected_sprint}"
                 db.collection('reponames').document(repo_doc_id).set({sprint_key: {"artefatos": combined_artifacts}}, merge=True)
             st.success(f"Artefatos inseridos na '{selected_sprint}' do repositório '{selected_repo}' com sucesso!")
+
+    # Seção separada para remover artefatos
+    st.title("Remover Artefatos")
+
+    if selected_sprint:
+        docs = db.collection('reponames').where('name', '==', selected_repo).stream()
+        for doc in docs:
+            repo_doc_id = doc.id
+            existing_artifacts = get_existing_artifacts(repo_doc_id, selected_sprint)
+
+            if existing_artifacts:
+                st.subheader(f"Artefatos na {selected_sprint}:")
+                artifacts_to_remove = st.multiselect(
+                    "Selecione os artefatos que deseja remover:",
+                    [f"{artifact['nome']}: {artifact['descricao']}" for artifact in existing_artifacts]
+                )
+
+                if st.button("Remover Artefatos Selecionados"):
+                    updated_artifacts = [
+                        artifact for artifact in existing_artifacts
+                        if f"{artifact['nome']}: {artifact['descricao']}" not in artifacts_to_remove
+                    ]
+                    
+                    # Atualizar a lista de artefatos no Firestore
+                    sprint_key = f"{selected_sprint}"
+                    db.collection('reponames').document(repo_doc_id).set({sprint_key: {"artefatos": updated_artifacts}}, merge=True)
+                    st.success("Artefatos removidos com sucesso!")
+            else:
+                st.write(f"Não há artefatos cadastrados na {selected_sprint}.")
 else:
     st.error("Acesso negado. Por favor, insira um token válido.")
