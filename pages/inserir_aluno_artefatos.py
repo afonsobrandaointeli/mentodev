@@ -51,9 +51,14 @@ if check_auth(token):
                 repo_names.append(data['name'])
         return repo_names
 
-    # Função para validar e-mails
-    def is_valid_email(email):
-        return email.endswith("@sou.inteli.edu.br")
+    # Função para obter os artefatos existentes em uma Sprint
+    def get_existing_artifacts(repo_doc_id, sprint_name):
+        doc = db.collection('reponames').document(repo_doc_id).get()
+        if doc.exists:
+            data = doc.to_dict()
+            sprint_data = data.get(sprint_name, {})
+            return sprint_data.get('artefatos', [])
+        return []
 
     # Obter os nomes dos repositórios
     repo_names = get_repo_names()
@@ -161,9 +166,44 @@ if check_auth(token):
         else:
             docs = db.collection('reponames').where('name', '==', selected_repo).stream()
             for doc in docs:
-                # Atualizar o documento com os artefatos e suas descrições dentro da sprint selecionada
+                repo_doc_id = doc.id
+                
+                # Obter os artefatos existentes e adicionar os novos
+                existing_artifacts = get_existing_artifacts(repo_doc_id, selected_sprint)
+                combined_artifacts = existing_artifacts + artifacts_data
+                
+                # Atualizar o documento com a lista combinada de artefatos dentro da sprint selecionada
                 sprint_key = f"{selected_sprint}"
-                db.collection('reponames').document(doc.id).set({sprint_key: {"artefatos": artifacts_data}}, merge=True)
+                db.collection('reponames').document(repo_doc_id).set({sprint_key: {"artefatos": combined_artifacts}}, merge=True)
             st.success(f"Artefatos inseridos na '{selected_sprint}' do repositório '{selected_repo}' com sucesso!")
+
+    # Seção separada para remover artefatos
+    st.title("Remover Artefatos")
+
+    if selected_sprint:
+        docs = db.collection('reponames').where('name', '==', selected_repo).stream()
+        for doc in docs:
+            repo_doc_id = doc.id
+            existing_artifacts = get_existing_artifacts(repo_doc_id, selected_sprint)
+
+            if existing_artifacts:
+                st.subheader(f"Artefatos na {selected_sprint}:")
+                artifacts_to_remove = st.multiselect(
+                    "Selecione os artefatos que deseja remover:",
+                    [f"{artifact['nome']}: {artifact['descricao']}" for artifact in existing_artifacts]
+                )
+
+                if st.button("Remover Artefatos Selecionados"):
+                    updated_artifacts = [
+                        artifact for artifact in existing_artifacts
+                        if f"{artifact['nome']}: {artifact['descricao']}" not in artifacts_to_remove
+                    ]
+                    
+                    # Atualizar a lista de artefatos no Firestore
+                    sprint_key = f"{selected_sprint}"
+                    db.collection('reponames').document(repo_doc_id).set({sprint_key: {"artefatos": updated_artifacts}}, merge=True)
+                    st.success("Artefatos removidos com sucesso!")
+            else:
+                st.write(f"Não há artefatos cadastrados na {selected_sprint}.")
 else:
     st.error("Acesso negado. Por favor, insira um token válido.")

@@ -60,16 +60,23 @@ if check_auth(token):
         return [], None
 
     # Função para salvar as notas e a média na sprint
-    def save_artifact_scores(repo_doc_id, sprint_name, artifacts, average_score):
+    def save_artifact_scores(repo_doc_id, sprint_name, artifacts, artifact_scores):
         sprint_key = f"{sprint_name}"
 
-        # Atualizar os artefatos com as notas
+        # Obter artefatos existentes
+        existing_artifacts, _ = get_artifacts(selected_repo, select_sprint)
+
+        # Atualizar os artefatos com as novas notas, mantendo os antigos
         updated_artifacts = []
-        for artifact in artifacts:
-            artifact_name = artifact['nome']
-            artifact['nota'] = artifact_scores.get(artifact_name, 0)
+        for artifact in existing_artifacts:
+            if artifact['nome'] in artifact_scores:
+                artifact['nota'] = artifact_scores[artifact['nome']]
             updated_artifacts.append(artifact)
-        
+
+        # Calcular a média das notas
+        total_score = sum(artifact.get('nota', 0) for artifact in updated_artifacts)
+        average_score = round(total_score / len(updated_artifacts), 2) if updated_artifacts else 0
+
         # Preparar os dados para atualização
         updates = {
             f"{sprint_key}.artefatos": updated_artifacts,
@@ -97,16 +104,21 @@ if check_auth(token):
         # Seleção de artefatos da sprint para avaliação
         selected_artifacts = []
         artifact_scores = {}
-        for artifact in artifacts_list:
+        for i, artifact in enumerate(artifacts_list):
             if st.checkbox(f"{artifact.get('nome')}: {artifact.get('descricao')}"):
                 selected_artifacts.append(artifact)
-                artifact_scores[artifact['nome']] = st.number_input(f"Digite a Nota do Artefato {artifact['nome']}:", min_value=0, max_value=10)
+                artifact_scores[artifact['nome']] = st.number_input(
+                    f"Digite a Nota do Artefato {artifact['nome']}:",
+                    min_value=0.0,
+                    max_value=10.0,
+                    step=0.01,
+                    key=f"nota_{artifact['nome']}_{i}"  # Chave única para cada número de entrada
+                )
         
         if st.button("Submeter Notas"):
             if selected_artifacts and repo_doc_id:
-                average_score = round(sum(artifact_scores.values()) / len(artifact_scores), 2)
-                save_artifact_scores(repo_doc_id, select_sprint, selected_artifacts, average_score)
-                st.success(f"Notas submetidas com sucesso! Média da Sprint: {average_score}")
+                save_artifact_scores(repo_doc_id, select_sprint, selected_artifacts, artifact_scores)
+                st.success(f"Notas submetidas com sucesso!")
             else:
                 st.error("Selecione pelo menos um artefato e atribua uma nota.")
     else:
