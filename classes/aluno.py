@@ -127,43 +127,40 @@ class AlunoRepository:
 
             df = pd.DataFrame(dates)
 
-            # Agora 'alunos' deve ser um dicionário
-            if isinstance(alunos, dict):
-                # Adiciona colunas para cada aluno utilizando apenas os emails
-                for aluno_email in alunos.values():
-                    df[aluno_email] = ""
+            # Adiciona colunas para cada aluno utilizando apenas os emails
+            for aluno_email in alunos.values():
+                df[aluno_email] = ""
 
-                # Exibe o editor de tabela no Streamlit
-                edited_df = st.data_editor(df, use_container_width=True, key="editable_table")
+            # Exibe o editor de tabela no Streamlit
+            edited_df = st.data_editor(df, use_container_width=True, key="editable_table")
 
-                # Botão de salvar as modificações
-                if st.button("Salvar"):
-                    updated_alunos = {}
+            # Botão de salvar as modificações
+            if st.button("Salvar"):
+                updated_alunos = {}
 
-                    # Processa as alterações na tabela
-                    for aluno_key, aluno_email in alunos.items():
-                        daily_list = []
-                        for _, row in edited_df.iterrows():
-                            daily_list.append({
-                                "Data": row['Data'],
-                                aluno_email: row[aluno_email]
-                            })
-                        updated_alunos[aluno_key] = {
-                            aluno_email: aluno_email,
-                            "dailys": daily_list
-                        }
+                # Processa as alterações na tabela
+                for aluno_key, aluno_email in alunos.items():
+                    daily_list = []
+                    for _, row in edited_df.iterrows():
+                        status = row.get(aluno_email, '')  # Obtém o status correspondente ao aluno
+                        daily_list.append({
+                            "Data": row['Data'],
+                            aluno_email: status
+                        })
+                    updated_alunos[aluno_key] = {
+                        aluno_email: aluno_email,
+                        "dailys": daily_list
+                    }
 
-                    # Atualiza o Firestore com os dados modificados
-                    docs = self.db.collection('reponames').where('name', '==', repo_name).stream()
-                    for doc in docs:
-                        update_data = {"alunos": updated_alunos}
-                        self.db.collection('reponames').document(doc.id).set(update_data, merge=True)
+                # Atualiza o Firestore com os dados modificados
+                docs = self.db.collection('reponames').where('name', '==', repo_name).stream()
+                for doc in docs:
+                    update_data = {"alunos": updated_alunos}
+                    self.db.collection('reponames').document(doc.id).set(update_data, merge=True)
 
-                    st.success("Dados salvos com sucesso!")
-            else:
-                st.error("O objeto 'alunos' não é um dicionário.")
+                st.success("Dados salvos com sucesso!")
         else:
-            # Neste ponto, 'alunos' deve ser inicializado para evitar o erro
+            # Inicializa a variável alunos
             alunos = self.get_alunos_by_repo(repo_name)
             
             # Estrutura para armazenar os dados corretamente
@@ -185,7 +182,6 @@ class AlunoRepository:
 
             edited_df = st.data_editor(df, use_container_width=True, key="editable_table")
 
-            # Botão de salvar as modificações
             if st.button("Salvar"):
                 updated_alunos = {}
 
@@ -193,9 +189,10 @@ class AlunoRepository:
                 for aluno_key, aluno_email in alunos.items():
                     daily_list = []
                     for _, row in edited_df.iterrows():
+                        status = row.get(aluno_email, '')  # Obtém o status correspondente ao aluno
                         daily_list.append({
                             "Data": row['Data'],
-                            aluno_email: row.get(aluno_email, '')
+                            aluno_email: status
                         })
                     updated_alunos[aluno_key] = {
                         aluno_email: aluno_email,
@@ -209,6 +206,7 @@ class AlunoRepository:
                     self.db.collection('reponames').document(doc.id).set(update_data, merge=True)
 
                 st.success("Dados salvos com sucesso!")
+
 
 
 
