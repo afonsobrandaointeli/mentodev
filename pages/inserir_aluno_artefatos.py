@@ -51,9 +51,14 @@ if check_auth(token):
                 repo_names.append(data['name'])
         return repo_names
 
-    # Função para validar e-mails
-    def is_valid_email(email):
-        return email.endswith("@sou.inteli.edu.br")
+    # Função para obter os artefatos existentes em uma Sprint
+    def get_existing_artifacts(repo_doc_id, sprint_name):
+        doc = db.collection('reponames').document(repo_doc_id).get()
+        if doc.exists:
+            data = doc.to_dict()
+            sprint_data = data.get(sprint_name, {})
+            return sprint_data.get('artefatos', [])
+        return []
 
     # Obter os nomes dos repositórios
     repo_names = get_repo_names()
@@ -161,9 +166,15 @@ if check_auth(token):
         else:
             docs = db.collection('reponames').where('name', '==', selected_repo).stream()
             for doc in docs:
-                # Atualizar o documento com os artefatos e suas descrições dentro da sprint selecionada
+                repo_doc_id = doc.id
+                
+                # Obter os artefatos existentes e adicionar os novos
+                existing_artifacts = get_existing_artifacts(repo_doc_id, selected_sprint)
+                combined_artifacts = existing_artifacts + artifacts_data
+                
+                # Atualizar o documento com a lista combinada de artefatos dentro da sprint selecionada
                 sprint_key = f"{selected_sprint}"
-                db.collection('reponames').document(doc.id).set({sprint_key: {"artefatos": artifacts_data}}, merge=True)
+                db.collection('reponames').document(repo_doc_id).set({sprint_key: {"artefatos": combined_artifacts}}, merge=True)
             st.success(f"Artefatos inseridos na '{selected_sprint}' do repositório '{selected_repo}' com sucesso!")
 else:
     st.error("Acesso negado. Por favor, insira um token válido.")
