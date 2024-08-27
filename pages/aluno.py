@@ -16,12 +16,12 @@ alunos = aluno_repo.get_alunos_by_repo(selected_repo)
 
 # Exibir a lista de alunos em uma tabela
 if alunos:
-    st.subheader(f"Alunos no repositório '{selected_repo}':")
+    st.subheader(f"Alunos encontrados no repositório '{selected_repo}':")
     
     # Verificar se 'alunos' é um dicionário e se contém dados
     if isinstance(alunos, dict) and alunos:
 
-        aluno_repo.dailys(selected_repo)
+        aluno_repo.decision(selected_repo)
 else:
     st.write("Nenhum aluno encontrado para este repositório.")
 
