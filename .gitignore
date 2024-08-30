@@ -1,2 +1,4 @@
 key.json
 .env
+classes/__pycache__/
+classes/__pycache__/aluno.cpython-312.pyc
