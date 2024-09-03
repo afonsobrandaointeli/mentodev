@@ -60,22 +60,34 @@ if check_auth(token):
                 return sprint_data.get('artefatos', []), sprint_data.get('media_notas')
         return [], None
 
-    # Função para obter alunos de um repositório
+   # Função para obter alunos de um repositório
     def get_students(repo_doc_id):
         doc = db.collection('reponames').document(repo_doc_id).get()
         if doc.exists:
             data = doc.to_dict()
             alunos = data.get('alunos', {})
-            # Obter os emails diretamente das chaves do dicionário
-            emails = list(alunos.keys())
+            emails = []
+            for aluno_key, aluno_value in alunos.items():
+                # Verifica se a chave (aluno_key) contém "@" e é um e-mail válido
+                if "@" in aluno_key:
+                    emails.append(aluno_key)
+                elif isinstance(aluno_value, dict):
+                    # Se aluno_value for um dicionário, procura por uma chave que seja um e-mail
+                    for key in aluno_value:
+                        if "@" in key:
+                            emails.append(key)
             return emails
         return []
+    # Função para normalizar o e-mail para usar no Firestore
+    def normalize_email(email):
+        return email.replace('.', '_').replace('@', '_')
 
     # Função para salvar a nota final do aluno no banco de dados
     def save_student_grade(repo_doc_id, sprint_name, student_email, grade):
+        normalized_email = normalize_email(student_email)
         # Atualizar o documento com a nota final do aluno
         db.collection('reponames').document(repo_doc_id).update({
-            f"{sprint_name}.alunos.{student_email}.nota_final": grade
+            f"{sprint_name}.alunos.{normalized_email}.nota_final": grade
         })
 
     # Obter nomes dos repositórios para seleção
@@ -183,7 +195,8 @@ if check_auth(token):
                         "Nota": [round(nota_artefato_final, 2)] + [round(nota, 2) for nota in notas_criterios] + [nota_final],
                         "Demerito": ["-" if i > 0 else round(demerito_total, 2) for i in range(4)] + ["-"],
                         "Ir Além": ["-" if i > 0 else round(ir_alem, 2) for i in range(4)] + ["-"],
-                        "Nota Final": ["-" for _ in range(4)] + [nota_final]
+                        "Nota Final": ["-" for _ in range(4)] + [nota_final],
+                        "Média Artefatos": [media_artefato] + ["-" for _ in range(3)] + ["-"],
                     }
 
                     df = pd.DataFrame(data)
