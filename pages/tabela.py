@@ -27,8 +27,9 @@ if not firebase_admin._apps:
 # Inicializar Firestore
 db = firestore.client()
 
-# Streamlit UI
-st.title("Seleção de Repositórios e Avaliação")
+# Função para normalizar o e-mail, substituindo "." e "@" por "_"
+def normalize_email(email):
+    return email.replace('.', '_').replace('@', '_')
 
 # Função para obter nomes dos repositórios
 def get_repo_names():
@@ -40,39 +41,40 @@ def get_repo_names():
 
 # Função para obter alunos de um repositório
 def get_students(repo_doc_id):
-    # Acessar a coleção do repositório e buscar os alunos
     doc = db.collection('reponames').document(repo_doc_id).get()
     if doc.exists:
         data = doc.to_dict()
         alunos = data.get('alunos', {})
         emails = []
         for aluno_key, aluno_value in alunos.items():
-            # Verifica se a chave (aluno_key) contém "@" e é um e-mail válido
-            if "@" in aluno_key:
-                emails.append(aluno_key)
-            elif isinstance(aluno_value, dict):
-                # Se aluno_value for um dicionário, procura por uma chave que seja um e-mail
+            if isinstance(aluno_value, str):  # Se for uma string (e-mail diretamente)
+                emails.append(aluno_value)
+            elif isinstance(aluno_value, dict):  # Se for um dicionário, verificamos as chaves
                 for key in aluno_value:
                     if "@" in key:
                         emails.append(key)
         return emails
     return []
 
-# Função para obter avaliações de um aluno de uma sprint
+# Função para obter avaliações de um aluno de uma sprint (sem normalizar e-mail)
 def get_avaliacao_aluno(repo_doc_id, sprint_name, student_email):
-    # Carregar o documento do Firestore
     doc = db.collection('reponames').document(repo_doc_id).get()
-    
     if doc.exists:
         data = doc.to_dict()
-        # caminho do documento para acessar os dados do aluno corretamente
+        # Buscar os dados do aluno com o e-mail diretamente
         sprint_data = data.get(f'sprints.{sprint_name}.alunos.{student_email}', {})
-        
         if sprint_data:
             return sprint_data
-        else:
-            return {}
     return {}
+
+# Função para salvar a nota final do aluno no Firestore (usando um campo regularizado)
+def save_student_grade(repo_doc_id, sprint_name, student_email, grade):
+    normalized_email = normalize_email(student_email)
+    # Atualizar o documento criando um campo regularizado para as notas
+    db.collection('reponames').document(repo_doc_id).update({
+        f"sprints.{sprint_name}.alunos_regularizados.{normalized_email}.nota_final": grade
+    })
+
 # Função para calcular a média dos artefatos
 def calcular_media_artefatos(avaliacao_artefatos):
     if not avaliacao_artefatos:
@@ -86,10 +88,8 @@ def calcular_media_artefatos(avaliacao_artefatos):
 
 # Função para calcular a nota final
 def calcular_nota_final(avaliacao_aluno):
-    # Calcular a média dos artefatos
     media_artefato = calcular_media_artefatos(avaliacao_aluno.get('avaliacao_artefatos', {})) * 0.4
 
-    # Função para calcular a pontuação dos critérios
     def calcular_pontuacao_regua(porcentagem):
         if porcentagem == 0:
             return 0
@@ -115,7 +115,6 @@ def calcular_nota_final(avaliacao_aluno):
             return 9
         return 0
 
-    # Calcular a pontuação dos critérios e das dailys
     perc_criterio_1 = avaliacao_aluno.get('percent_criterio_1', 0)
     perc_criterio_2 = avaliacao_aluno.get('percent_criterio_2', 0)
     perc_dailys = avaliacao_aluno.get('percent_dailys', 0)
@@ -124,14 +123,12 @@ def calcular_nota_final(avaliacao_aluno):
     nota_criterio_2 = calcular_pontuacao_regua(perc_criterio_2) * 0.2
     nota_dailys = calcular_pontuacao_regua(perc_dailys) * 0.2
 
-    # Calcular demérito para critérios insuficientes
     demerito = 0
     if calcular_pontuacao_regua(perc_criterio_1) == 3:
         demerito += 0.5
     if calcular_pontuacao_regua(perc_criterio_2) == 3:
         demerito += 0.5
 
-    # Calcular mérito "Ir Além"
     ir_alem = min(
         0.1 * sum(1 for score in avaliacao_aluno.get('avaliacao_artefatos', {}).values() if score == "Acima do Esperado") + 
         0.25 * (1 if calcular_pontuacao_regua(perc_criterio_1) == 9 else 0) + 
@@ -139,7 +136,6 @@ def calcular_nota_final(avaliacao_aluno):
         1.0
     )
 
-    # Calcular a nota final
     nota_final = max(media_artefato + nota_criterio_1 + nota_criterio_2 + nota_dailys - demerito + ir_alem, 0)
     return round(nota_final, 2)
 
@@ -149,45 +145,65 @@ selected_repo = st.selectbox("Escolha um repositório:", repo_names)
 
 # Verificar se algum repositório foi selecionado
 if selected_repo:
-    # Obter o ID do documento do repositório
     repo_doc_id = None
     docs = db.collection('reponames').where('name', '==', selected_repo).stream()
     for doc in docs:
         repo_doc_id = doc.id
         break
 
-    # Se o repositório foi encontrado
     if repo_doc_id:
         selected_sprint = st.selectbox("Escolha uma Sprint:", [f"Sprint_{i+1}" for i in range(5)])
-
-        # Obter alunos
         student_emails = get_students(repo_doc_id)
-        
-        # Verifica se foram encontrados alunos
+
         if student_emails:
             selected_student_email = st.selectbox("Escolha um aluno (por e-mail):", student_emails)
-
-            # Puxar os dados de avaliação diretamente do banco
             avaliacao_aluno = get_avaliacao_aluno(repo_doc_id, selected_sprint, selected_student_email)
 
-            # Se houver avaliações, calcular e mostrar a nota final
             if avaliacao_aluno:
                 nota_final = calcular_nota_final(avaliacao_aluno)
+                media_artefato = calcular_media_artefatos(avaliacao_aluno.get('avaliacao_artefatos', {}))
 
-                st.subheader(f"Nota Final do Aluno {selected_student_email}: {nota_final}")
+                # Adicionar artefatos à tabela
+                artefatos_avaliados = avaliacao_aluno.get('avaliacao_artefatos', {})
+                artefato_data = {
+                    "Artefato": [],
+                    "Score": []
+                }
 
-                # Exibir os detalhes da avaliação
-                st.write("Avaliação de Artefatos:")
-                for artefato, avaliacao in avaliacao_aluno.get('avaliacao_artefatos', {}).items():
-                    st.write(f"{artefato}: {avaliacao}")
+                for artefato, avaliacao in artefatos_avaliados.items():
+                    artefato_data["Artefato"].append(artefato)
+                    artefato_data["Score"].append(avaliacao)
 
-                st.write("Critérios e Dailys:")
-                st.write(f"Participação nas Dailys: {avaliacao_aluno.get('percent_dailys', 0)}%")
-                st.write(f"Critério 1: {avaliacao_aluno.get('percent_criterio_1', 0)}%")
-                st.write(f"Critério 2: {avaliacao_aluno.get('percent_criterio_2', 0)}%")
+                artefato_df = pd.DataFrame(artefato_data)
+
+                # Exibir artefatos
+                st.subheader("Avaliação de Artefatos:")
+                st.table(artefato_df)
+
+                # Criar DataFrame para exibir todas
+                                # Criar DataFrame para exibir todas as informações na tabela
+                data = {
+                    "Categoria": ["Média de Artefatos", "Participação nas Dailys", "Critério 1", "Critério 2", "Nota Final"],
+                    "Avaliação": [
+                        f"{round(media_artefato * 100, 2)}%", 
+                        f"{avaliacao_aluno.get('percent_dailys', 0)}%", 
+                        f"{avaliacao_aluno.get('percent_criterio_1', 0)}%", 
+                        f"{avaliacao_aluno.get('percent_criterio_2', 0)}%", 
+                        f"{nota_final}"
+                    ]
+                }
+
+                df = pd.DataFrame(data)
+                st.subheader("Resumo da Avaliação:")
+                st.write(df)
+
+                # Mostrar a nota final e a opção de salvar abaixo da tabela
+                if st.button("Salvar Nota Final"):
+                    save_student_grade(repo_doc_id, selected_sprint, selected_student_email, nota_final)
+                    st.success(f"Nota final de {nota_final} salva com sucesso para o aluno {selected_student_email}.")
+
             else:
                 st.warning(f"Não há avaliações cadastradas para {selected_student_email} na {selected_sprint}.")
         else:
             st.warning("Nenhum aluno encontrado para este repositório.")
-else:
-    st.write("Selecione um repositório.")
+
