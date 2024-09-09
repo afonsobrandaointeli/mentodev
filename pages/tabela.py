@@ -137,7 +137,6 @@ if check_auth(token):
             return 9
         return 0
 
-    # Função para calcular a nota final com a contribuição dos artefatos e critérios
     def calcular_nota_final(avaliacao_aluno, media_geral):
         # 1. Calculando a média dos artefatos
         media_artefato = calcular_media_artefatos(avaliacao_aluno.get('avaliacao_artefatos', {})) * 0.4
@@ -158,22 +157,44 @@ if check_auth(token):
         if calcular_pontuacao_regua(perc_criterio_2) == 3:
             demerito += 0.5
 
-        # 4. "Ir Além" - aplicando a regra com base no número de artefatos "Acima do Esperado"
+        # 4. "Ir Além" - aplicando a regra para critérios/dailys e artefatos "Acima do Esperado"
+        ir_alem_criterios = 0
+        if 91 <= perc_criterio_1 <= 100:
+            ir_alem_criterios += 1
+        if 91 <= perc_criterio_2 <= 100:
+            ir_alem_criterios += 1
+        if 91 <= perc_dailys <= 100:
+            ir_alem_criterios += 1
+
+        if ir_alem_criterios == 1:
+            ir_alem_criterios_bonus = 0.1
+        elif ir_alem_criterios == 2:
+            ir_alem_criterios_bonus = 0.25
+        elif ir_alem_criterios == 3:
+            ir_alem_criterios_bonus = 0.5
+        else:
+            ir_alem_criterios_bonus = 0
+
         num_acima_esperado = sum(1 for score in avaliacao_aluno.get('avaliacao_artefatos', {}).values() if score == "Acima do Esperado")
 
         if num_acima_esperado == 1:
-            ir_alem = 0.1
+            ir_alem_artefatos_bonus = 0.1
         elif num_acima_esperado == 2:
-            ir_alem = 0.25
+            ir_alem_artefatos_bonus = 0.25
         elif num_acima_esperado >= 3:
-            ir_alem = 0.5
+            ir_alem_artefatos_bonus = 0.5
         else:
-            ir_alem = 0
+            ir_alem_artefatos_bonus = 0
+
+        # Garantir que o bônus total de "Ir Além" não ultrapasse 1.0
+        ir_alem = min(ir_alem_criterios_bonus + ir_alem_artefatos_bonus, 1.0)
 
         # 5. Calculando a nota final
         nota_final = max(media_artefato + nota_criterio_1 + nota_criterio_2 + nota_dailys - demerito + ir_alem, 0)
         return round(nota_final, 2)
 
+    # Lista para armazenar o resumo final de alunos e notas
+    resumo_final = []
     # Obter os repositórios e mostrar o seletor
     repo_names = get_repo_names()
     selected_repo = st.selectbox("Escolha um repositório:", repo_names)
@@ -218,6 +239,8 @@ if check_auth(token):
 
                         # Adicionar uma mensagem de sucesso com a nota final
                         st.success(f"A nota final do aluno {student_email} é: {nota_final}")
+                        # Adicionando aluno e nota ao resumo final
+                        resumo_final.append({"Aluno": student_email, "Nota Final": nota_final})
 
                     else:
                         # Caso não existam avaliações registradas para o aluno
@@ -226,6 +249,12 @@ if check_auth(token):
                 st.warning("Nenhum aluno encontrado para este repositório.")
         else:
             st.error("Repositório não encontrado.")
+            
+            # Exibir o resumo final de alunos e notas
+    if resumo_final:
+            st.subheader("Resumo Final de Alunos e Notas Finais")
+            resumo_df = pd.DataFrame(resumo_final)
+            st.write(resumo_df)
 else:
     st.error("Acesso negado. Por favor, insira um token válido.")
 
