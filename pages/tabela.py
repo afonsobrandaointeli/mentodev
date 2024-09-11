@@ -49,22 +49,29 @@ if check_auth(token):
             repo_names.append(doc.to_dict().get('name'))
         return repo_names
 
-    # Função para obter alunos de um repositório
-    def get_students(repo_doc_id):
-        doc = db.collection('reponames').document(repo_doc_id).get()
-        if doc.exists:
+        # Função para obter os alunos de um repositório (somente e-mails)
+    def get_alunos_by_repo(repo_name):
+        alunos = []
+        docs = db.collection('reponames').where('name', '==', repo_name).stream()
+        for doc in docs:
             data = doc.to_dict()
-            alunos = data.get('alunos', {})
-            emails = []
-            for aluno_key, aluno_value in alunos.items():
-                if "@" in aluno_key:
-                    emails.append(aluno_key)
-                elif isinstance(aluno_value, dict):
-                    for key in aluno_value:
-                        if "@" in key:
-                            emails.append(key)
-            return emails
-        return []
+            if 'alunos' in data:
+                # Verifica se 'alunos' é um dicionário ou lista
+                if isinstance(data['alunos'], dict):
+                    for key, value in data['alunos'].items():
+                        # Verifica se o valor é um e-mail (contém "@")
+                        if "@" in value:
+                            alunos.append(value)
+                        elif isinstance(value, dict):
+                            for sub_key, sub_value in value.items():
+                                if "@" in sub_value:
+                                    alunos.append(sub_value)
+                elif isinstance(data['alunos'], list):
+                    for aluno in data['alunos']:
+                        if "@" in aluno:
+                            alunos.append(aluno)
+        return alunos
+
 
     # Função para normalizar o e-mail para usar no Firestore
     def normalize_email(email):
@@ -209,7 +216,7 @@ if check_auth(token):
 
         if repo_doc_id:
             selected_sprint = st.selectbox("Escolha uma Sprint:", [f"Sprint_{i+1}" for i in range(5)])
-            student_emails = get_students(repo_doc_id)
+            student_emails = get_alunos_by_repo(repo_name=selected_repo)
             artifacts, media_geral = get_artifacts(repo_doc_id, selected_sprint)
 
             if student_emails:
