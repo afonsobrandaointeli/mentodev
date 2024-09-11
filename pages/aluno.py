@@ -45,14 +45,22 @@ def get_alunos_by_repo(repo_name):
     for doc in docs:
         data = doc.to_dict()
         if 'alunos' in data:
-            for key, value in data['alunos'].items():
-                if "@" in key:
-                    alunos.append(key)
-                elif isinstance(value, dict):
-                    for sub_key in value.keys():
-                        if "@" in sub_key:
-                            alunos.append(sub_key)
+            # Verifica se 'alunos' é um dicionário ou lista
+            if isinstance(data['alunos'], dict):
+                for key, value in data['alunos'].items():
+                    # Verifica se o valor é um e-mail (contém "@")
+                    if "@" in value:
+                        alunos.append(value)
+                    elif isinstance(value, dict):
+                        for sub_key, sub_value in value.items():
+                            if "@" in sub_value:
+                                alunos.append(sub_value)
+            elif isinstance(data['alunos'], list):
+                for aluno in data['alunos']:
+                    if "@" in aluno:
+                        alunos.append(aluno)
     return alunos
+
 
 # Função para obter artefatos de um repositório e sprint selecionado
 def get_artifacts(repo_doc_id, sprint_name):
