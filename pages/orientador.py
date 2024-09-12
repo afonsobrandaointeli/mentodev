@@ -15,7 +15,7 @@ def check_auth(token):
     return token == AUTH_TOKEN
 
 # Título da aplicação
-st.title("Seleção de Repositórios")
+st.title("Avaliação de Artefatos")
 
 # Campo de entrada para o token
 token = st.text_input("Insira o token de acesso:", type="password")
@@ -59,18 +59,40 @@ if check_auth(token):
             return sprint_data.get('artefatos', []), doc.id
         return [], None
 
+    # Função para carregar as notas existentes de artefatos
+    def load_existing_artifact_scores(repo_doc_id, sprint_name):
+        sprint_key = f"{sprint_name}"
+
+        # Obter o documento da coleção
+        repo_doc = db.collection('reponames').document(repo_doc_id).get()
+        if repo_doc.exists:
+            repo_data = repo_doc.to_dict()
+
+            # Verificar se a sprint e artefatos existem
+            if sprint_key in repo_data and 'artefatos' in repo_data[sprint_key]:
+                return repo_data[sprint_key]['artefatos']
+        
+        return []
+
     # Função para salvar as notas e a média na sprint
     def save_artifact_scores(repo_doc_id, sprint_name, artifacts, artifact_scores):
         sprint_key = f"{sprint_name}"
 
-        # Obter artefatos existentes
-        existing_artifacts, _ = get_artifacts(selected_repo, select_sprint)
+        # Carregar artefatos existentes e as notas previamente atribuídas
+        existing_artifacts = load_existing_artifact_scores(repo_doc_id, sprint_name)
 
-        # Atualizar os artefatos com as novas notas, mantendo os antigos
+        # Atualizar os artefatos com as novas notas, mantendo as anteriores
         updated_artifacts = []
-        for artifact in existing_artifacts:
-            if artifact['nome'] in artifact_scores:
-                artifact['nota'] = artifact_scores[artifact['nome']]
+        for artifact in artifacts:
+            artifact_name = artifact['nome']
+            if artifact_name in artifact_scores:
+                # Se o artefato já tem uma nota nova, atualize-a
+                artifact['nota'] = artifact_scores[artifact_name]
+            else:
+                # Caso contrário, mantenha a nota existente, se houver
+                existing_artifact = next((a for a in existing_artifacts if a['nome'] == artifact_name), None)
+                if existing_artifact and 'nota' in existing_artifact:
+                    artifact['nota'] = existing_artifact['nota']
             updated_artifacts.append(artifact)
 
         # Calcular a média das notas
@@ -101,20 +123,28 @@ if check_auth(token):
     if artifacts_list:
         st.write(f"Artefatos disponíveis na {select_sprint} do repositório {selected_repo}:")
 
+        # Carregar as notas existentes para exibir
+        existing_artifacts = load_existing_artifact_scores(repo_doc_id, select_sprint)
+
         # Seleção de artefatos da sprint para avaliação
         selected_artifacts = []
         artifact_scores = {}
         for i, artifact in enumerate(artifacts_list):
+            # Buscar nota existente (se houver)
+            existing_artifact = next((a for a in existing_artifacts if a['nome'] == artifact['nome']), None)
+            # Conversão do initial_score para float
+            initial_score = float(existing_artifact['nota']) if existing_artifact and 'nota' in existing_artifact else 0.0
+
             if st.checkbox(f"{artifact.get('nome')}: {artifact.get('descricao')}"):
                 selected_artifacts.append(artifact)
                 artifact_scores[artifact['nome']] = st.number_input(
                     f"Digite a Nota do Artefato {artifact['nome']}:",
+                    value=initial_score,  # Exibe a nota existente, se houver, agora como float
                     min_value=0.0,
                     max_value=10.0,
                     step=0.01,
                     key=f"nota_{artifact['nome']}_{i}"  # Chave única para cada número de entrada
                 )
-        
         if st.button("Submeter Notas"):
             if selected_artifacts and repo_doc_id:
                 save_artifact_scores(repo_doc_id, select_sprint, selected_artifacts, artifact_scores)

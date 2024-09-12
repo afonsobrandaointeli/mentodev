@@ -101,11 +101,11 @@ def salvar_avaliacao(repo_name, aluno, sprint, dailys, criterio_1, criterio_2, a
 
 # Função para gerar a tabela de dailys, critérios e avaliação de artefatos
 def exibir_tabela(aluno, df, dailys, criterio_1, criterio_2, avaliacao_artefatos, lista_artefatos):
-    opcoes_sim_nao = ["Sim", "Não"]
+    opcoes_sim_nao = ["Não", "Sim"]
     avaliacao_opcoes = ["Não Participou", "Abaixo do Esperado", "Dentro do Esperado", "Acima do Esperado"]
 
     # Exibir Participação na Daily
-    st.subheader("Participação na Daily")
+    st.subheader("Participação no Critério 1")
     for i in range(len(df)):
         data = df.at[i, 'Data']
 
@@ -115,24 +115,24 @@ def exibir_tabela(aluno, df, dailys, criterio_1, criterio_2, avaliacao_artefatos
         dailys[i] = st.selectbox(f"{data} - {aluno} (Daily)", opcoes_sim_nao, index=index_daily, key=f"daily_{aluno}_{i}")
 
     # Exibir Participação no Critério 1
-    st.subheader("Participação no Critério 1")
+    st.subheader("Participação no Critério 2")
     for i in range(len(df)):
         data = df.at[i, 'Data']
 
         # Critério 1
         valor_criterio_1 = criterio_1.get(i, "")
         index_criterio_1 = opcoes_sim_nao.index(valor_criterio_1) if valor_criterio_1 in opcoes_sim_nao else 0
-        criterio_1[i] = st.selectbox(f"{data} - {aluno} (Critério 1)", opcoes_sim_nao, index=index_criterio_1, key=f"criterio1_{aluno}_{i}")
+        criterio_1[i] = st.selectbox(f"{data} - {aluno} (Critério 2)", opcoes_sim_nao, index=index_criterio_1, key=f"criterio1_{aluno}_{i}")
 
     # Exibir Participação no Critério 2
-    st.subheader("Participação no Critério 2")
+    st.subheader("Participação no Critério 3")
     for i in range(len(df)):
         data = df.at[i, 'Data']
 
         # Critério 2
         valor_criterio_2 = criterio_2.get(i, "")
         index_criterio_2 = opcoes_sim_nao.index(valor_criterio_2) if valor_criterio_2 in opcoes_sim_nao else 0
-        criterio_2[i] = st.selectbox(f"{data} - {aluno} (Critério 2)", opcoes_sim_nao, index=index_criterio_2, key=f"criterio2_{aluno}_{i}")
+        criterio_2[i] = st.selectbox(f"{data} - {aluno} (Critério 3)", opcoes_sim_nao, index=index_criterio_2, key=f"criterio2_{aluno}_{i}")
 
     # Exibir avaliação dos artefatos
     st.subheader(f"Avaliação dos Artefatos para {aluno}")
@@ -161,6 +161,7 @@ if selected_repo:
 
     if alunos:
         # Selecionar o aluno (agora pelo e-mail)
+        alunos.sort()
         aluno_selecionado = st.selectbox("Escolha um aluno para avaliar:", alunos)
 
         # Selecionar a sprint
