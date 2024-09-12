@@ -301,25 +301,33 @@ if check_auth(token):
                     df = pd.DataFrame(data)
                     st.table(df)
                     
-                    # Exibir avaliação detalhada por artefato com descrições em formato de tabela
+                    
+                    # Exibir avaliação detalhada por artefato 
                     st.subheader("Avaliação Detalhada por Artefato")
 
                     if avaliacao_aluno.get('avaliacao_artefatos'):
-                        # Criar uma lista de dicionários para alimentar o DataFrame
                         data_artefatos = []
                         for artefato, avaliacao in avaliacao_aluno.get('avaliacao_artefatos').items():
-                            # Recuperar a descrição completa do artefato com base no nome
-                            descricao_artefato = next((art['descricao'] for art in artifacts if art['nome'] == artefato), 'Descrição não encontrada')
+                            # Adicionar o nome do artefato e sua avaliação
                             data_artefatos.append({
-                                "Descrição": descricao_artefato,
+                                "Artefato": artefato,
                                 "Avaliação": avaliacao
                             })
                         
-                        # Criar o DataFrame e exibir a tabela
-                        df_artefatos = pd.DataFrame(data_artefatos)
+                        # Função para extrair o número do artefato
+                        def extrair_numero(artefato_nome):
+                            return int(artefato_nome.split(" - ")[0])
+
+                        # Ordenar a lista de artefatos com base no número
+                        data_artefatos_sorted = sorted(data_artefatos, key=lambda x: extrair_numero(x["Artefato"]))
+                        
+                        # Criar o DataFrame com a lista ordenada e exibir a tabela
+                        df_artefatos = pd.DataFrame(data_artefatos_sorted)
                         st.table(df_artefatos)
                     else:
                         st.write("Nenhuma avaliação de artefato disponível.")
+
+
                     # Adicionar a nota ao resumo final para exibir depois
                     resumo_final.append({"Aluno": student_email, "Nota Inicial": ((nota_final) - ir_alem) + demerito, "Demérito": demerito, "Mérito": ir_alem, "Nota Final": nota_final})
                     
