@@ -9,6 +9,7 @@ import pandas as pd
 # Carregar variáveis de ambiente do arquivo .env
 load_dotenv()
 
+media_notas_global = 0
 # Inicializar o Firebase apenas se ainda não estiver inicializado
 if not firebase_admin._apps:
     cred = credentials.Certificate({

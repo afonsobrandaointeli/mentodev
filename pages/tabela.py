@@ -40,6 +40,7 @@ st.title("Seleção de Repositórios e Avaliação Automática")
 # Token input
 token = st.text_input("Insira o token de acesso:", type="password")
 
+media_notas_global = 0
 if check_auth(token):
     # Função para obter nomes dos repositórios
     def get_repo_names():
@@ -81,20 +82,24 @@ if check_auth(token):
             return sprint_data
         return {}
 
-    # Função para obter artefatos de uma sprint e a média geral de notas
     def get_artifacts(repo_doc_id, sprint_name):
-        doc = db.collection('reponames').document(repo_doc_id).get()
+        global media_notas_global  # Tornar a variável acessível globalmente
+        doc = db.collection('reponames').document(repo_doc_id).get()       
         if doc.exists:
             data = doc.to_dict()
-            artifacts = data.get(f'sprints.{sprint_name}.artefatos', {})
-            media_notas = data.get(f'sprints.{sprint_name}.media_notas', 0)
-            return artifacts, media_notas
+            # Verificar se o sprint está no formato correto
+            sprint_data = data.get(sprint_name, {})  # Acessar diretamente a chave 'Sprint_X'
+
+            artifacts = sprint_data.get('artefatos', {})
+            media_notas_global = sprint_data.get('media_notas', 0)  # Atualizando a variável global            
+            return artifacts, media_notas_global
         return {}, 0
 
-    # Função para calcular a média dos artefatos com base na régua de avaliação
+        ## Função corrigida para testar sem o fator media_notas
     def calcular_media_artefatos(avaliacao_artefatos):
         if not avaliacao_artefatos:
             return 0
+
         # Inicializar os valores das categorias
         percent_abaixo = 0
         percent_dentro = 0
@@ -123,17 +128,21 @@ if check_auth(token):
         else:
             return 0
 
-        # Fórmula adaptada (ponderação dos critérios)
-        nota_artefato = (5 * percent_abaixo) + (9 * percent_dentro) + (10 * percent_acima)
+        # Ajustar os pesos de cada avaliação de artefato
+        nota_artefato = ((5 * percent_abaixo) + (9 * percent_dentro) + (10 * percent_acima))
 
         # Se o aluno "Não Participou", aplicar o desconto (1 - percentual de não participação)
         if percent_nao_participou > 0:
             nota_artefato *= (1 - percent_nao_participou)
-        # Ajuste final: se a nota for exatamente 10, retornar 9
-        if nota_artefato == 10:
-            return 9
-        return round(nota_artefato, 2)
 
+        # Convertendo a nota_artefato para porcentagem da media_notas_global
+        # Por exemplo, se nota_artefato é 9, ele representa 90% de media_notas_global
+        nota_final_artefato = (nota_artefato / 10) * media_notas_global
+
+        # Aplicando o peso de 40%
+        nota_final_ponderada = nota_final_artefato * 0.4
+
+        return round(nota_final_ponderada, 2)
 
     # Função para calcular a pontuação dos critérios com base nas porcentagens
     def calcular_pontuacao_regua(porcentagem):
@@ -162,8 +171,9 @@ if check_auth(token):
         return 0
 
     def calcular_nota_final(avaliacao_aluno, media_geral):
+        
         # 1. Calculando a média dos artefatos com a nova função corrigida
-        media_artefato = calcular_media_artefatos(avaliacao_aluno.get('avaliacao_artefatos', {})) * 0.4
+        media_artefato = calcular_media_artefatos(avaliacao_aluno.get('avaliacao_artefatos', {}))
 
         # 2. Calculando as notas dos critérios e dailys com peso 0.2 cada
         perc_criterio_1 = avaliacao_aluno.get('percent_criterio_1', 0)
@@ -191,16 +201,30 @@ if check_auth(token):
             demerito += 0.25 * nota_dailys
         elif (calcular_pontuacao_regua(perc_dailys) <= 4) and (calcular_pontuacao_regua(perc_dailys) > 0):
             demerito += 0.5 * nota_dailys
-
+        
         # 4. "Ir Além" - aplicando a regra para critérios/dailys e artefatos "Acima do Esperado"
         ir_alem_criterios_bonus = 0
-        if 91 <= perc_criterio_1 <= 100:
-            ir_alem_criterios_bonus += 0.1
-        if 91 <= perc_criterio_2 <= 100:
-            ir_alem_criterios_bonus += 0.1
-        if 91 <= perc_dailys <= 100:
-            ir_alem_criterios_bonus += 0.1
 
+        # Contar quantos critérios estão entre 91% e 100%
+        num_criterios_acima_esperado = 0
+        if 91 <= perc_criterio_1 <= 100:
+            num_criterios_acima_esperado += 1
+        if 91 <= perc_criterio_2 <= 100:
+            num_criterios_acima_esperado += 1
+        if 91 <= perc_dailys <= 100:
+            num_criterios_acima_esperado += 1
+
+        # Aplicar a mesma lógica de "Ir Além" dos artefatos
+        if num_criterios_acima_esperado == 1:
+            ir_alem_criterios_bonus = 0.1
+        elif num_criterios_acima_esperado == 2:
+            ir_alem_criterios_bonus = 0.25
+        elif num_criterios_acima_esperado >= 3:
+            ir_alem_criterios_bonus = 0.5
+        else:
+            ir_alem_criterios_bonus = 0
+
+        # Lógica para os artefatos "Acima do Esperado"
         num_acima_esperado = sum(1 for score in avaliacao_aluno.get('avaliacao_artefatos', {}).values() if score == "Acima do Esperado")
 
         if num_acima_esperado == 1:
@@ -284,7 +308,7 @@ if check_auth(token):
                         st.write("Nenhuma avaliação de artefato disponível.")
                         
                     # Adicionar a nota ao resumo final para exibir depois
-                    resumo_final.append({"Aluno": student_email, "Nota Final": nota_final})
+                    resumo_final.append({"Aluno": student_email, "Nota Inicial": ((nota_final) - ir_alem) + demerito, "Demérito": demerito, "Mérito": ir_alem, "Nota Final": nota_final})
                     
                 else:
                     st.warning(f"Não há avaliações cadastradas para {student_email} na {selected_sprint}.")
